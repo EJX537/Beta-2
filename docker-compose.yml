@@ -8,7 +8,14 @@
 #                      reads   /data/agent1.db (RO)
 #                      writes  /data/interview.db        -> http://localhost:8080
 #
-# Bring it up:  docker compose up --build
+# This compose is for LOCAL DEV (two services, separate logs, shared ./data).
+# PRODUCTION / GMI Cloud uses a single combined container instead — see
+# Dockerfile.combined (resume + interview + nginx in one image), because GMI
+# deployments can't share a volume, so the agents must co-locate to share
+# agent1.db. Build/push: docker buildx build --platform linux/amd64 \
+#   -t braahulm/beta-career:v1 -f Dockerfile.combined --push .
+#
+# Bring it up (local):  docker compose up --build
 # Secrets come from .env:
 #   ANTHROPIC_API_KEY   (resume agent)
 #   GMI_MAAS_API_KEY / GMI_MAAS_BASE_URL / GMI_MODELS / GMI_GRADING_MODEL  (interview agent)

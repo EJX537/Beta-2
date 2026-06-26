@@ -1,0 +1,67 @@
+# Combined single-container image: resume agent (Python) + interview agent (Node)
+# behind nginx, sharing /data so the interview agent can read the resume agent's
+# agent1.db. Required on GMI Cloud, where the two agents must co-locate (separate
+# deployments can't share a volume).
+#
+#   nginx :8080  -> /interview/* : Node interview agent (127.0.0.1:8002)
+#                -> /*           : Python resume agent  (127.0.0.1:8001)
+
+# ---- Build the interview agent (Node) ----
+FROM node:24-bookworm-slim AS node-build
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build && npm prune --omit=dev && npm cache clean --force
+
+# ---- Node binaries source for the final image ----
+FROM node:24-bookworm-slim AS node
+
+# ---- Final image: Python + Node + claude CLI + nginx + supervisor ----
+FROM python:3.13-slim-bookworm
+
+# Node.js runtime (for the interview agent and the claude CLI).
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+# Reverse proxy + process manager.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI — the resume agent's Claude Agent SDK spawns it.
+RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+
+WORKDIR /app
+
+# Resume agent (Python): deps + source.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY agent1.py seed_jobs.py ./
+COPY static ./static
+
+# Interview agent (Node): build output + prod deps + configs (loaded from cwd/configs).
+COPY --from=node-build /build/dist ./interview/dist
+COPY --from=node-build /build/node_modules ./interview/node_modules
+COPY --from=node-build /build/package.json ./interview/package.json
+COPY configs ./interview/configs
+
+# Proxy + supervisor config.
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY deploy/supervisord.conf /etc/supervisor/conf.d/agents.conf
+
+# Non-root user for the two agent processes (claude CLI refuses root); nginx and
+# supervisord run as root. Shared /data owned by app.
+RUN useradd --create-home --home-dir /home/app app \
+    && mkdir -p /data \
+    && chown -R app:app /data /app /home/app
+ENV HOME=/home/app \
+    AGENT_DB=/data/agent1.db \
+    INTERVIEW_DB=/data/interview.db \
+    INTERVIEW_ARTIFACT_ROOT=/data/interview-artifacts
+
+EXPOSE 8080
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/agents.conf"]
