@@ -1,8 +1,26 @@
-node_modules
-dist
+# VCS / docs
 .git
 .gitignore
 *.md
-.dockerignore
+
+# Secrets & docker meta
 .env
 .env.*
+.dockerignore
+Dockerfile*
+docker-compose.yml
+
+# Node (TS scaffold)
+node_modules
+dist
+
+# Python
+.venv
+__pycache__
+*.py[cod]
+
+# Local SQLite store (rebuilt at runtime)
+*.db
+*.db-wal
+*.db-shm
+.claude

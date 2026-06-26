@@ -1,14 +1,42 @@
+# Two-agent stack:
+#   1. resume-agent     — resume upload + ranking (agent1.py). Ready to run.
+#   2. interview-agent   — job interview agent (teammate's). Placeholder below.
+#
+# Bring it up:   docker compose up --build
+# The resume agent needs ANTHROPIC_API_KEY — put it in .env (already gitignored).
+
 services:
-  agent:
+  resume-agent:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.resume
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
-      - NODE_ENV=production
-      - PORT=8080
-      # Uncomment these when deploying on GMI (injected by AgentBox)
-      # - GMI_MAAS_BASE_URL=https://api.gmi-serving.com
-      # - GMI_MAAS_API_KEY=your-key
-      # - GMI_MODELS=deepseek-ai/DeepSeek-V4-Pro
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      - AGENT_PORT=8081
+      - AGENT_DB=/data/agent1.db
+      # Optional tuning (defaults shown in agent1.py):
+      # - AGENT_MODEL=claude-sonnet-4-6
+      # - AGENT_MAX_RESUME_CHARS=60000
+    volumes:
+      # Persist the SQLite store (jobs + ranked candidates) across restarts.
+      - resume-data:/data
+    restart: unless-stopped
+
+  # ── Interview agent (teammate-owned) ──────────────────────────────────────
+  # Uncomment and fill in once the teammate's service is ready. Point `context`
+  # at their code dir, set their Dockerfile, and expose their port.
+  #
+  # interview-agent:
+  #   build:
+  #     context: ./interview          # <- teammate's source directory
+  #     dockerfile: Dockerfile        # <- teammate's Dockerfile
+  #   ports:
+  #     - "8082:8082"                 # <- host:container port for their service
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+  #   restart: unless-stopped
+
+volumes:
+  resume-data:

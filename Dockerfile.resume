@@ -1,0 +1,46 @@
+# Resume-ranking agent (agent1.py).
+#
+# This service is built on the Claude Agent SDK, whose Python package shells out
+# to the `claude` CLI (@anthropic-ai/claude-code) as a subprocess. That CLI is a
+# Node program — so the image needs BOTH a Python runtime and Node.js + the CLI.
+
+# ---- Node stage: source of the node/npm binaries we copy into the final image
+FROM node:22-bookworm-slim AS node
+
+# ---- Final image: Python runtime + Node (copied in) + the claude CLI ----
+FROM python:3.13-slim-bookworm
+
+# Bring Node.js + npm over from the node stage (no apt/NodeSource needed).
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+# Install the Claude Code CLI globally. The Python SDK finds it via
+# `shutil.which("claude")` (lands in /usr/local/bin).
+RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+
+WORKDIR /app
+
+# Python deps first for layer caching.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Non-root user with a writable HOME (the CLI writes config under ~/.claude).
+RUN useradd --create-home --home-dir /home/app app
+ENV HOME=/home/app
+
+# App source.
+COPY agent1.py seed_jobs.py ./
+COPY static ./static
+
+# Persisted SQLite DB lives here (mount a volume to keep data across restarts).
+RUN mkdir -p /data && chown -R app:app /data /app /home/app
+ENV AGENT_DB=/data/agent1.db \
+    AGENT_PORT=8081
+
+USER app
+EXPOSE 8081
+
+# Run via uvicorn. agent1.py binds 0.0.0.0 on AGENT_PORT.
+CMD ["python", "agent1.py"]
