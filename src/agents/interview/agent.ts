@@ -12,6 +12,7 @@ import type {
   InterviewAgentOptions,
   InterviewRequest,
   InterviewResponse,
+  TechnicalChallengeConfig,
 } from "./types.js";
 import { loadInterviewConfig, type LoadInterviewConfigOptions } from "./config/loader.js";
 import { InterviewSessionStore } from "./state/session-store.js";
@@ -122,11 +123,25 @@ export async function createInterviewAgent(
     throw new Error(`GMI model "${modelId}" failed to register.`);
   }
 
+  // Build challenge resolver that returns the correct challenge per state
+  const challengeMap: Record<string, TechnicalChallengeConfig> = {
+    ...(config.technicalChallenges ?? {}),
+  };
+  if (config.technicalChallenge && !challengeMap["default"]) {
+    challengeMap["default"] = config.technicalChallenge;
+  }
+  const technicalChallengeResolver = (stateId: string): TechnicalChallengeConfig | undefined => {
+    const state = config.interview.states.find((s) => s.id === stateId);
+    if (!state) return undefined;
+    const cid = state.challenge_id ?? (state.expected_submission.type === "code" ? "default" : undefined);
+    return cid ? challengeMap[cid] : undefined;
+  };
+
   const customTools: ToolDefinition[] = createInterviewTools(
     store,
     config.interview,
     {
-      technicalChallenge: config.technicalChallenge,
+      technicalChallenge: technicalChallengeResolver,
       persistence,
       artifactStore,
       ...(agentOptions.audioGradingClient

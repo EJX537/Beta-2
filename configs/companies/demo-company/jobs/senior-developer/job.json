@@ -1,0 +1,22 @@
+{
+  "id": "senior-developer",
+  "title": "Senior Software Developer",
+  "company_id": "demo-company",
+  "level": "senior",
+  "description": "Lead and mentor engineering teams while delivering high-quality software solutions. Drive architectural decisions and own complex features end-to-end.",
+  "responsibilities": [
+    "Design and implement scalable software systems",
+    "Mentor junior and mid-level engineers through code reviews and pair programming",
+    "Lead technical planning and architecture discussions",
+    "Collaborate with product and design to define technical roadmaps",
+    "Champion engineering best practices and code quality standards"
+  ],
+  "required_skills": ["TypeScript", "Node.js", "Algorithms", "Communication"],
+  "preferred_skills": ["React", "System Design", "PostgreSQL", "AWS", "CI/CD"],
+  "evaluation_priorities": [
+    "problem_solving",
+    "technical_depth",
+    "communication",
+    "role_fit"
+  ]
+}

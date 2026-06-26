@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { resolve, join, parse } from "node:path";
 import type {
   CompanyConfig,
   JobConfig,
@@ -34,6 +34,7 @@ function resolveConfigRoot(options?: LoadInterviewConfigOptions): string {
  *   <configRoot>/companies/<companyId>/jobs/<jobId>/job.json
  *   <configRoot>/companies/<companyId>/jobs/<jobId>/interview.json
  *   <configRoot>/companies/<companyId>/jobs/<jobId>/technical-challenge.json (optional)
+ *   <configRoot>/companies/<companyId>/jobs/<jobId>/technical-challenges/*.json (optional)
  */
 export async function loadInterviewConfig(
   companyId: string,
@@ -65,11 +66,39 @@ export async function loadInterviewConfig(
     // technical-challenge.json is optional
   }
 
+  // Load multiple technical challenges from technical-challenges/ directory
+  let technicalChallenges: Record<string, TechnicalChallengeConfig> | undefined;
+  try {
+    const tcDir = join(jobDir, "technical-challenges");
+    const entries = await readdir(tcDir, { withFileTypes: true });
+    const challengeFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith(".json"),
+    );
+    if (challengeFiles.length > 0) {
+      technicalChallenges = {};
+      for (const entry of challengeFiles) {
+        const key = parse(entry.name).name;
+        const raw = await readFile(join(tcDir, entry.name), "utf-8");
+        technicalChallenges[key] = JSON.parse(raw) as TechnicalChallengeConfig;
+      }
+    }
+  } catch {
+    // technical-challenges/ directory is optional
+  }
+
+  // Backward compat: inject single technical-challenge.json into the map under key "default"
+  if (technicalChallenge && technicalChallenges && !technicalChallenges["default"]) {
+    technicalChallenges["default"] = technicalChallenge;
+  } else if (technicalChallenge && !technicalChallenges) {
+    technicalChallenges = { default: technicalChallenge };
+  }
+
   const bundle: InterviewConfigBundle = {
     company,
     job,
     interview,
     technicalChallenge,
+    technicalChallenges,
   };
 
   validateInterviewConfigBundle(bundle);

@@ -1,8 +1,8 @@
-// Fully simulated end-to-end interview run.
+// Fully simulated end-to-end interview run for the senior-developer job.
 // Uses GMI minimax-tts-speech-2.6-turbo to generate candidate audio for the
 // behavioral (recorded response) rounds, uploads them as artifacts, drives the
-// interview FSM through the HTTP API, submits a FizzBuzz solution for the
-// technical round, and prints the final evaluation scorecard.
+// interview FSM through the HTTP API, submits FizzBuzz and Palindrome solutions,
+// and prints the final evaluation scorecard.
 //
 // Audio is cached to data/sim-audio/ and reused across runs; pass --regen to
 // force regeneration.
@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 
 const BASE_URL = `http://localhost:${process.env.PORT ?? 8080}`;
 const COMPANY_ID = "demo-company";
-const JOB_ID = "software-developer";
+const JOB_ID = "senior-developer";
 const REGEN = process.argv.includes("--regen");
 
 // Load GMI creds from .env (TTS uses the console request-queue API).
@@ -47,30 +47,44 @@ const CANDIDATE_CONTEXT = {
   profile: {
     candidate_name: "Alex Chen",
     resume_text:
-      "Alex Chen — Software Engineer, 5 years. TypeScript, Node.js, React. Built distributed caching and real-time collaboration features.",
-    skills: ["TypeScript", "Node.js", "React", "PostgreSQL", "AWS"],
+      "Alex Chen — Senior Software Engineer, 8 years. TypeScript, Node.js, React, System Design. Led teams building distributed systems and mentoring junior engineers.",
+    skills: ["TypeScript", "Node.js", "React", "PostgreSQL", "AWS", "System Design"],
   },
 };
 
 // Candidate answers (text -> TTS audio).
 const ANSWERS = {
   q1:
-    "I'm a software engineer with about five years of experience, mostly building web applications in TypeScript and Node. " +
+    "I'm a senior software engineer with about eight years of experience, mostly building web applications in TypeScript and Node. " +
     "What motivates me is taking messy real-world problems and turning them into clean, maintainable systems. " +
-    "In my last role I owned our real-time collaboration layer end to end, and I'm looking for a team where I can keep growing as a generalist while mentoring newer engineers.",
+    "In my last role I owned our real-time collaboration layer end to end and mentored three junior engineers. " +
+    "I'm looking for a team where I can keep growing as a technical leader while helping the team raise their bar.",
   q2:
     "The toughest problem I tackled was a distributed cache that kept going inconsistent across nodes, which caused stale data for users. " +
     "I traced it to a naive key-to-node mapping that shifted whenever a node joined. " +
     "I replaced it with consistent hashing and added a lightweight background sync for tombstones, which cut cache misses by about forty percent and eliminated the drift. " +
     "I learned to always question the assignment strategy, not just the cache policy.",
+  q3:
+    "A conflict I handled well was when two teams disagreed on whether to adopt a monorepo or keep separate repositories. " +
+    "Instead of escalating, I set up a meeting where each side presented their arguments with data. " +
+    "We realized both approaches had merit, so we agreed on a hybrid — shared packages in one repo, independent services in another. " +
+    "The compromise improved collaboration while preserving autonomy, and both teams felt heard.",
 };
 
-// Correct FizzBuzz solution for the technical round.
+// Correct FizzBuzz solution for the first technical round.
 const FIZZBUZZ_SOLUTION = `for (let i = 1; i <= 100; i++) {
   if (i % 15 === 0) console.log("FizzBuzz");
   else if (i % 3 === 0) console.log("Fizz");
   else if (i % 5 === 0) console.log("Buzz");
   else console.log(String(i));
+}
+`;
+
+// Correct Palindrome solution for the second technical round.
+const PALINDROME_SOLUTION = `const inputs = ["racecar","hello","A man a plan a canal Panama","world","Was it a car or a cat I saw"];
+for (const s of inputs) {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  console.log(clean === clean.split("").reverse().join("") ? "true" : "false");
 }
 `;
 
@@ -213,41 +227,31 @@ async function main() {
   log(`candidate: ${CANDIDATE_CONTEXT.profile.candidate_name}`);
   log(`audio cache: ${AUDIO_CACHE_DIR} (regen=${REGEN})`);
 
-  // Pre-generate (or load cached) audio for both behavioral rounds.
-  const audio1 = await getAnswerAudio("q1", ANSWERS.q1, "Recorded Response 1");
-  const audio2 = await getAnswerAudio("q2", ANSWERS.q2, "Recorded Response 2");
+  // Pre-generate (or load cached) audio for all three behavioral rounds.
+  const audio1 = await getAnswerAudio("q1", ANSWERS.q1, "Behavioral Q1");
+  const audio2 = await getAnswerAudio("q2", ANSWERS.q2, "Behavioral Q2");
+  const audio3 = await getAnswerAudio("q3", ANSWERS.q3, "Behavioral Q3");
 
-  // Turn 1: start at intro.
+  // Turn 1: start at behavioral_1 (no intro state — greeting is folded into agent_instruction).
   let r = await postInterview({ message: "Hi, I'm ready to begin the interview." });
   printTurn(1, r);
   let threadId = r.thread_id;
+  const s1 = currentStateId(r);
 
-  // Turn 2: answer intro (text) -> advance to video_question_1.
-  r = await postInterview({
-    threadId,
-    message: "Here is my introduction.",
-    submission: { answer: "I'm Alex, a software engineer with 5 years of experience. I'm excited about this role." },
-  });
-  printTurn(2, r);
-
-  // Turn 3: video_question_1 — upload audio, submit audio_artifact_ref.
-  const s3 = currentStateId(r);
-  if (s3 !== "video_question_1") {
-    log(`\n⚠️  Expected video_question_1, got ${s3}. Attempting to continue.`);
-  }
-  const ref1 = await uploadArtifact(threadId, s3 ?? "video_question_1", "audio", "answer1.mp3", "audio/mpeg", audio1);
+  // Turn 2: behavioral_1 — upload audio, submit audio_artifact_ref.
+  const ref1 = await uploadArtifact(threadId, s1 ?? "behavioral_1", "audio", "answer1.mp3", "audio/mpeg", audio1);
   log(`\n[Upload] answer1.mp3 -> ${ref1}`);
   r = await postInterview({
     threadId,
-    message: "Here is my recorded response.",
+    message: "Here is my recorded response for the first question.",
     submission: { audio_artifact_ref: ref1 },
     artifactRefs: [{ uri: ref1, mediaType: "audio/mpeg", fieldHint: "audio_artifact_ref" }],
   });
-  printTurn(3, r);
+  printTurn(2, r);
 
-  // Turn 4: video_question_2 — upload audio, submit audio_artifact_ref.
-  const s4 = currentStateId(r) ?? "video_question_2";
-  const ref2 = await uploadArtifact(threadId, s4, "audio", "answer2.mp3", "audio/mpeg", audio2);
+  // Turn 3: behavioral_2 — upload audio, submit audio_artifact_ref.
+  const s3 = currentStateId(r) ?? "behavioral_2";
+  const ref2 = await uploadArtifact(threadId, s3, "audio", "answer2.mp3", "audio/mpeg", audio2);
   log(`\n[Upload] answer2.mp3 -> ${ref2}`);
   r = await postInterview({
     threadId,
@@ -255,22 +259,46 @@ async function main() {
     submission: { audio_artifact_ref: ref2 },
     artifactRefs: [{ uri: ref2, mediaType: "audio/mpeg", fieldHint: "audio_artifact_ref" }],
   });
-  printTurn(4, r);
+  printTurn(3, r);
 
-  // Turn 5: technical_challenge — upload code, submit code_artifact_ref.
-  const s5 = currentStateId(r) ?? "technical_challenge";
-  const codeRef = await uploadArtifact(threadId, s5, "code", "code.json", "application/json", JSON.stringify({ files: { "solution.js": FIZZBUZZ_SOLUTION } }));
-  log(`\n[Upload] solution.js -> ${codeRef}`);
+  // Turn 4: behavioral_3 — upload audio, submit audio_artifact_ref.
+  const s4 = currentStateId(r) ?? "behavioral_3";
+  const ref3 = await uploadArtifact(threadId, s4, "audio", "answer3.mp3", "audio/mpeg", audio3);
+  log(`\n[Upload] answer3.mp3 -> ${ref3}`);
   r = await postInterview({
     threadId,
-    message: "Here is my solution to the coding challenge.",
-    submission: { language: "javascript", entrypoint: "solution.js", code_artifact_ref: codeRef },
-    artifactRefs: [{ uri: codeRef, mediaType: "application/json", fieldHint: "code_artifact_ref" }],
+    message: "Here is my recorded response for the third question.",
+    submission: { audio_artifact_ref: ref3 },
+    artifactRefs: [{ uri: ref3, mediaType: "audio/mpeg", fieldHint: "audio_artifact_ref" }],
+  });
+  printTurn(4, r);
+
+  // Turn 5: technical_1 (FizzBuzz) — upload code, submit code_artifact_ref.
+  const s5 = currentStateId(r) ?? "technical_1";
+  const codeRef1 = await uploadArtifact(threadId, s5, "code", "code1.json", "application/json", JSON.stringify({ files: { "solution.js": FIZZBUZZ_SOLUTION } }));
+  log(`\n[Upload] FizzBuzz solution -> ${codeRef1}`);
+  r = await postInterview({
+    threadId,
+    message: "Here is my FizzBuzz solution.",
+    submission: { language: "javascript", entrypoint: "solution.js", code_artifact_ref: codeRef1 },
+    artifactRefs: [{ uri: codeRef1, mediaType: "application/json", fieldHint: "code_artifact_ref" }],
   });
   printTurn(5, r);
 
+  // Turn 6: technical_2 (Palindrome) — upload code, submit code_artifact_ref.
+  const s6 = currentStateId(r) ?? "technical_2";
+  const codeRef2 = await uploadArtifact(threadId, s6, "code", "code2.json", "application/json", JSON.stringify({ files: { "solution.js": PALINDROME_SOLUTION } }));
+  log(`\n[Upload] Palindrome solution -> ${codeRef2}`);
+  r = await postInterview({
+    threadId,
+    message: "Here is my palindrome solution.",
+    submission: { language: "javascript", entrypoint: "solution.js", code_artifact_ref: codeRef2 },
+    artifactRefs: [{ uri: codeRef2, mediaType: "application/json", fieldHint: "code_artifact_ref" }],
+  });
+  printTurn(6, r);
+
   // Auto-advance through none-type states (technical_submission_review -> final_evaluation -> complete).
-  let turn = 6;
+  let turn = 7;
   let guard = 0;
   while (!r.complete && guard < 8) {
     r = await postInterview({ threadId, message: "Continue the interview." });

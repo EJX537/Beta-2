@@ -42,7 +42,7 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
     artifactRefs,
     lastRunnerResult,
   } = input;
-  const { company, job, interview, technicalChallenge } = config;
+  const { company, job, interview } = config;
 
   const lines: string[] = [];
 
@@ -111,6 +111,17 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
     lines.push(`Scores so far: ${JSON.stringify(session.scores)}`);
   }
 
+  // Resolve technical challenge per-state (supports challenge_id-based multi-challenge)
+  const challengeMap: Record<string, import("./types.js").TechnicalChallengeConfig> = {
+    ...(config.technicalChallenges ?? {}),
+  };
+  if (config.technicalChallenge && !challengeMap["default"]) {
+    challengeMap["default"] = config.technicalChallenge;
+  }
+  const resolvedChallengeId = currentState.challenge_id ??
+    (currentState.expected_submission.type === "code" ? "default" : undefined);
+  const resolvedChallenge = resolvedChallengeId ? challengeMap[resolvedChallengeId] : undefined;
+
   // Technical challenge details (when current state expects code, or when the
   // current state transitions into a code state so the agent presents the
   // exact configured challenge instead of inventing one).
@@ -122,21 +133,21 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
   const leadsToCodeState =
     currentState.expected_submission.type === "code" ||
     currentState.transitions_to.some((tid) => codeStateIds.has(tid));
-  if (leadsToCodeState && technicalChallenge) {
+  if (leadsToCodeState && resolvedChallenge) {
     lines.push(``);
-    lines.push(`Technical Challenge: ${technicalChallenge.title}`);
-    lines.push(`Challenge prompt: ${technicalChallenge.prompt}`);
-    if (technicalChallenge.accepted_languages && technicalChallenge.accepted_languages.length > 0) {
-      lines.push(`Accepted languages: ${technicalChallenge.accepted_languages.join(", ")}`);
+    lines.push(`Technical Challenge: ${resolvedChallenge.title}`);
+    lines.push(`Challenge prompt: ${resolvedChallenge.prompt}`);
+    if (resolvedChallenge.accepted_languages && resolvedChallenge.accepted_languages.length > 0) {
+      lines.push(`Accepted languages: ${resolvedChallenge.accepted_languages.join(", ")}`);
     }
-    if (technicalChallenge.acceptedLanguages && technicalChallenge.acceptedLanguages.length > 0) {
-      lines.push(`Accepted languages: ${technicalChallenge.acceptedLanguages.join(", ")}`);
+    if (resolvedChallenge.acceptedLanguages && resolvedChallenge.acceptedLanguages.length > 0) {
+      lines.push(`Accepted languages: ${resolvedChallenge.acceptedLanguages.join(", ")}`);
     }
-    if (technicalChallenge.requiredFiles && technicalChallenge.requiredFiles.length > 0) {
-      lines.push(`Required files: ${technicalChallenge.requiredFiles.join(", ")}`);
+    if (resolvedChallenge.requiredFiles && resolvedChallenge.requiredFiles.length > 0) {
+      lines.push(`Required files: ${resolvedChallenge.requiredFiles.join(", ")}`);
     }
-    if (technicalChallenge.scoring_rubric) {
-      lines.push(`Scoring rubric: ${JSON.stringify(technicalChallenge.scoring_rubric)}`);
+    if (resolvedChallenge.scoring_rubric) {
+      lines.push(`Scoring rubric: ${JSON.stringify(resolvedChallenge.scoring_rubric)}`);
     }
     if (lastRunnerResult) {
       lines.push(`Last runner result: ${JSON.stringify(lastRunnerResult)}`);

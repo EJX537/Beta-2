@@ -1,0 +1,201 @@
+{
+  "company_id": "demo-company",
+  "job_id": "senior-developer",
+  "version": "1.0.0",
+  "states": [
+    {
+      "id": "behavioral_1",
+      "label": "Behavioral Q1",
+      "agent_instruction": "Welcome to the interview! I'll start by asking you a few behavioral questions before we move on to the technical challenges. Tell me about your background and what motivates you.",
+      "expected_submission": {
+        "type": "video",
+        "max_seconds": 30,
+        "fields": [],
+        "any_of_fields": ["audio_artifact_ref", "transcript_artifact_ref", "transcript"],
+        "optional_fields": ["video_artifact_ref"]
+      },
+      "transitions_to": ["behavioral_2"],
+      "score_weights": {
+        "communication": 0.5,
+        "role_fit": 0.5
+      },
+      "audioRubric": {
+        "categories": [
+          {
+            "label": "Clarity",
+            "description": "How clearly and coherently the candidate articulates their background and motivations.",
+            "weight": 0.4,
+            "maxScore": 10
+          },
+          {
+            "label": "Relevance",
+            "description": "How relevant the response is to the question asked.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Depth",
+            "description": "The depth of insight, self-awareness, and thoughtfulness in the response.",
+            "weight": 0.3,
+            "maxScore": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "behavioral_2",
+      "label": "Behavioral Q2",
+      "agent_instruction": "Describe a challenging technical problem you solved. Walk me through your approach and the outcome.",
+      "expected_submission": {
+        "type": "video",
+        "max_seconds": 30,
+        "fields": [],
+        "any_of_fields": ["audio_artifact_ref", "transcript_artifact_ref", "transcript"],
+        "optional_fields": ["video_artifact_ref"]
+      },
+      "transitions_to": ["behavioral_3"],
+      "score_weights": {
+        "problem_solving": 0.5,
+        "communication": 0.5
+      },
+      "audioRubric": {
+        "categories": [
+          {
+            "label": "Clarity",
+            "description": "How clearly the candidate explains the technical problem and solution.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Relevance",
+            "description": "How relevant the example is to the question and the role.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Depth",
+            "description": "Technical depth of the explanation and problem-solving approach.",
+            "weight": 0.4,
+            "maxScore": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "behavioral_3",
+      "label": "Behavioral Q3",
+      "agent_instruction": "Tell me about a time you collaborated through a conflict. How did you handle the disagreement and what was the outcome?",
+      "expected_submission": {
+        "type": "video",
+        "max_seconds": 30,
+        "fields": [],
+        "any_of_fields": ["audio_artifact_ref", "transcript_artifact_ref", "transcript"],
+        "optional_fields": ["video_artifact_ref"]
+      },
+      "transitions_to": ["technical_1"],
+      "score_weights": {
+        "communication": 0.5,
+        "role_fit": 0.5
+      },
+      "audioRubric": {
+        "categories": [
+          {
+            "label": "Clarity",
+            "description": "How clearly the candidate articulates the conflict and their role in resolving it.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Relevance",
+            "description": "How relevant the example is to collaboration and conflict resolution.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Depth",
+            "description": "Depth of insight into team dynamics, communication, and resolution strategies.",
+            "weight": 0.4,
+            "maxScore": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "technical_1",
+      "label": "Technical Challenge 1",
+      "agent_instruction": "Present the first coding challenge to the candidate.",
+      "expected_submission": {
+        "type": "code",
+        "fields": ["language", "entrypoint"],
+        "any_of_fields": ["code_artifact_ref", "files"]
+      },
+      "transitions_to": ["technical_2"],
+      "score_weights": {
+        "technical_depth": 0.5,
+        "problem_solving": 0.5
+      },
+      "challenge_id": "fizzbuzz"
+    },
+    {
+      "id": "technical_2",
+      "label": "Technical Challenge 2",
+      "agent_instruction": "Present the second coding challenge to the candidate.",
+      "expected_submission": {
+        "type": "code",
+        "fields": ["language", "entrypoint"],
+        "any_of_fields": ["code_artifact_ref", "files"]
+      },
+      "transitions_to": ["technical_submission_review"],
+      "score_weights": {
+        "technical_depth": 0.5,
+        "problem_solving": 0.5
+      },
+      "challenge_id": "palindrome"
+    },
+    {
+      "id": "technical_submission_review",
+      "label": "Technical Submission Review",
+      "agent_instruction": "Review the submitted code submissions and proceed with evaluation.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": ["final_evaluation"],
+      "score_weights": {}
+    },
+    {
+      "id": "final_evaluation",
+      "label": "Final Evaluation",
+      "agent_instruction": "Produce the final evaluation scorecard.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": ["complete"],
+      "score_weights": {}
+    },
+    {
+      "id": "complete",
+      "label": "Complete",
+      "agent_instruction": "Interview is complete. Provide summary.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": [],
+      "score_weights": {}
+    }
+  ],
+  "scoring_categories": {
+    "communication": { "label": "Communication", "max_score": 10 },
+    "technical_depth": { "label": "Technical Depth", "max_score": 10 },
+    "problem_solving": { "label": "Problem Solving", "max_score": 10 },
+    "role_fit": { "label": "Role Fit", "max_score": 10 }
+  },
+  "recommendation_levels": ["strong_yes", "yes", "consider", "no"],
+  "final_evaluation": {
+    "strong_threshold": 0.8,
+    "consider_threshold": 0.6,
+    "weak_threshold": 0.4
+  }
+}

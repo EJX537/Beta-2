@@ -45,6 +45,8 @@ export interface InterviewStateConfig {
   score_weights: Record<string, number>;
   /** Optional rubric for grading audio/video submissions in this state. */
   audioRubric?: AudioGradingRubric;
+  /** ID of the technical challenge to use for this code state. Resolved from technicalChallenges map. */
+  challenge_id?: string;
 }
 
 export interface AudioGradingRubricCategory {
@@ -174,6 +176,8 @@ export interface InterviewConfigBundle {
   job: JobConfig;
   interview: InterviewConfig;
   technicalChallenge?: TechnicalChallengeConfig;
+  /** Map of challenge_id -> TechnicalChallengeConfig, loaded from technical-challenges/ directory */
+  technicalChallenges?: Record<string, TechnicalChallengeConfig>;
 }
 
 // ── FSM Types ────────────────────────────────────────────────────────────
