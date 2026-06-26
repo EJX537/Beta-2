@@ -276,6 +276,10 @@ export interface InterviewAgentOptions {
   persistence?: import("./persistence/bridge.js").InterviewPersistenceBridge;
   /** Optional local artifact store for upload refs */
   artifactStore?: import("./artifacts/store.js").LocalArtifactStore;
+  /** OpenAI-compatible client for audio grading. If omitted, audio grading is skipped. */
+  audioGradingClient?: import("openai").default;
+  /** Grading model identifier. Defaults to "google/gemini-3.5-flash". */
+  audioGradingModel?: string;
 }
 
 // ── Interview Agent Request / Response ───────────────────────────────────

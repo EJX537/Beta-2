@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import type OpenAI from "openai";
 import type { JobStore } from "../jobStore.js";
 import type { GmiConfig } from "../gmi.js";
-import { DEFAULT_GMI_MODEL } from "../gmi.js";
+import { DEFAULT_GMI_MODEL, readGmiGradingConfig, createGmiGradingClient } from "../gmi.js";
 import { createInterviewAgent } from "../agents/interview/agent.js";
 import type { CreateInterviewAgentResult } from "../agents/interview/agent.js";
 import { LocalArtifactStore } from "../agents/interview/artifacts/store.js";
@@ -520,6 +520,17 @@ router.post("/interview/:companyId/:jobId", async (c) => {
     ...submissionArtifactRefs,
   ];
 
+  // Build audio grading client (best-effort; if GMI grading is unconfigured, skip)
+  let audioGradingClient: OpenAI | undefined;
+  let audioGradingModel: string | undefined;
+  try {
+    const gradingConfig = readGmiGradingConfig();
+    audioGradingClient = createGmiGradingClient(gradingConfig);
+    audioGradingModel = gradingConfig.model;
+  } catch {
+    console.warn("[interview] GMI grading not configured — audio grading will be skipped");
+  }
+
   const cacheKey = `${companyId}/${jobId}:${configRoot ?? "default"}:${artifactStore.root}`;
   const cache = c.var.interviewAgentCache;
 
@@ -541,6 +552,8 @@ router.post("/interview/:companyId/:jobId", async (c) => {
         jobId,
         persistence: c.var.persistence ?? undefined,
         artifactStore,
+        audioGradingClient,
+        audioGradingModel,
       },
       configRoot ? { configRoot } : undefined,
     );

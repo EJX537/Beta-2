@@ -111,8 +111,18 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
     lines.push(`Scores so far: ${JSON.stringify(session.scores)}`);
   }
 
-  // Technical challenge details (when current state expects code)
-  if (currentState.expected_submission.type === "code" && technicalChallenge) {
+  // Technical challenge details (when current state expects code, or when the
+  // current state transitions into a code state so the agent presents the
+  // exact configured challenge instead of inventing one).
+  const codeStateIds = new Set(
+    interview.states
+      .filter((s) => s.expected_submission.type === "code")
+      .map((s) => s.id),
+  );
+  const leadsToCodeState =
+    currentState.expected_submission.type === "code" ||
+    currentState.transitions_to.some((tid) => codeStateIds.has(tid));
+  if (leadsToCodeState && technicalChallenge) {
     lines.push(``);
     lines.push(`Technical Challenge: ${technicalChallenge.title}`);
     lines.push(`Challenge prompt: ${technicalChallenge.prompt}`);
@@ -121,6 +131,9 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
     }
     if (technicalChallenge.acceptedLanguages && technicalChallenge.acceptedLanguages.length > 0) {
       lines.push(`Accepted languages: ${technicalChallenge.acceptedLanguages.join(", ")}`);
+    }
+    if (technicalChallenge.requiredFiles && technicalChallenge.requiredFiles.length > 0) {
+      lines.push(`Required files: ${technicalChallenge.requiredFiles.join(", ")}`);
     }
     if (technicalChallenge.scoring_rubric) {
       lines.push(`Scoring rubric: ${JSON.stringify(technicalChallenge.scoring_rubric)}`);
@@ -134,6 +147,7 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
   lines.push(``);
   lines.push("Hard rule: Do NOT invent states or interview phases not in the allowed FSM sequence above.");
   lines.push("Hard rule: Ask only for the current state's required submission. Do not ask about future states.");
+  lines.push("Hard rule: When presenting the technical challenge, use the exact title and prompt from the Technical Challenge context above. Do not invent or substitute a different challenge.");
   lines.push("Hard rule: The interview state machine advances only through interview tools. Never claim the state advanced unless advance_interview_state succeeded.");
 
   lines.push("── End Per-turn Interview Context ──");

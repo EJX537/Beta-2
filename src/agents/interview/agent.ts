@@ -129,6 +129,12 @@ export async function createInterviewAgent(
       technicalChallenge: config.technicalChallenge,
       persistence,
       artifactStore,
+      ...(agentOptions.audioGradingClient
+        ? {
+            audioGradingClient: agentOptions.audioGradingClient,
+            audioGradingModel: agentOptions.audioGradingModel,
+          }
+        : {}),
     },
   );
   const settingsManager = SettingsManager.inMemory({
