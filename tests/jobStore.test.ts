@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { JobStore } from "./jobStore.js";
+import { JobStore } from "../src/jobStore.js";
 
 describe("JobStore", () => {
   it("inserts and retrieves a job", () => {
