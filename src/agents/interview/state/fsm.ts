@@ -8,6 +8,9 @@ import type {
     FinalEvaluation,
     CandidateContext,
 } from "../types.js";
+import {
+    invalidSubmission,
+} from "../errors.js";
 
 // ── Session Factory ──────────────────────────────────────────────────────
 
@@ -76,7 +79,7 @@ export function getInterviewStateView(
         nextSubmission,
         submissions: session.submissions,
         scores: session.scores,
-        evaluation: finalEvaluation,
+        evaluation: finalEvaluation ?? session.finalEvaluation,
     };
 }
 
@@ -121,6 +124,9 @@ export function getNextSubmissionRequirement(
  * state's requirements.
  *
  * Returns an array of error messages (empty = valid).
+ *
+ * @throws {InterviewError} with code INVALID_SUBMISSION when validation fails.
+ *   Callers may catch this or check the returned error string array.
  */
 export function validateSubmissionForCurrentState(
     session: InterviewSession,
@@ -147,11 +153,14 @@ export function validateSubmissionForCurrentState(
     }
 
     const errors: string[] = [];
+    const missingFields: string[] = [];
+    const failedAnyOfFields: string[] = [];
 
     for (const field of requirement.fields) {
         const value = submissionData[field];
         if (value === undefined || value === null || value === "") {
             errors.push(`Missing required field: "${field}"`);
+            missingFields.push(field);
         }
     }
 
@@ -167,6 +176,7 @@ export function validateSubmissionForCurrentState(
                     .map((field) => `"${field}"`)
                     .join(", ")}`,
             );
+            failedAnyOfFields.push(...requirement.any_of_fields);
         }
     }
 
@@ -185,7 +195,8 @@ export function validateSubmissionForCurrentState(
  * according to the interview config.
  *
  * @returns The updated session (mutated in place for simplicity)
- * @throws {Error} if submission is invalid or state has no transitions
+ * @throws {InterviewError} with code INVALID_SUBMISSION if submission is invalid
+ * @throws {Error} if state has no transitions
  */
 export function applySubmissionAndAdvance(
     session: InterviewSession,
@@ -198,7 +209,39 @@ export function applySubmissionAndAdvance(
         submissionData,
     );
     if (errors.length > 0) {
-        throw new Error(`Submission validation failed: ${errors.join("; ")}`);
+        const missingFields: string[] = [];
+        const failedAnyOfFields: string[] = [];
+
+        const state = findState(interviewConfig, session.currentStateId);
+        const requirement = state?.expected_submission;
+
+        if (requirement) {
+            for (const field of requirement.fields) {
+                const value = submissionData[field];
+                if (value === undefined || value === null || value === "") {
+                    missingFields.push(field);
+                }
+            }
+            if (requirement.any_of_fields) {
+                const hasAnyField = requirement.any_of_fields.some((field) => {
+                    const value = submissionData[field];
+                    return value !== undefined && value !== null && value !== "";
+                });
+                if (!hasAnyField) {
+                    failedAnyOfFields.push(...requirement.any_of_fields);
+                }
+            }
+        }
+
+        throw invalidSubmission(
+            `Submission validation failed: ${errors.join("; ")}`,
+            {
+                errors,
+                ...(missingFields.length > 0 ? { missingFields } : {}),
+                ...(failedAnyOfFields.length > 0 ? { anyOfFields: failedAnyOfFields } : {}),
+                stateId: session.currentStateId,
+            },
+        );
     }
 
     const currentState = findState(interviewConfig, session.currentStateId);

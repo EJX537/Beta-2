@@ -2,6 +2,7 @@ import { createSyntheticSourceInfo, createExtensionRuntime, type ResourceLoader 
 import type {
   InterviewConfigBundle,
   InterviewSession,
+  CandidateArtifactReference,
   InterviewStateConfig,
   SubmissionRequirement,
 } from "./types.js";
@@ -16,6 +17,9 @@ export interface InterviewJitContextInput {
   session: InterviewSession;
   currentState: InterviewStateConfig;
   nextSubmission: SubmissionRequirement | null;
+  turnId?: string;
+  pendingSubmission?: Record<string, unknown>;
+  artifactRefs?: CandidateArtifactReference[];
   lastRunnerResult?: Record<string, unknown>;
 }
 
@@ -28,7 +32,16 @@ export interface InterviewJitContextInput {
  * reuse the stable system prompt, skill list, and tool definitions.
  */
 export function createInterviewJitContext(input: InterviewJitContextInput): string {
-  const { config, session, currentState, nextSubmission, lastRunnerResult } = input;
+  const {
+    config,
+    session,
+    currentState,
+    nextSubmission,
+    turnId,
+    pendingSubmission,
+    artifactRefs,
+    lastRunnerResult,
+  } = input;
   const { company, job, interview, technicalChallenge } = config;
 
   const lines: string[] = [];
@@ -58,6 +71,21 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
     lines.push(`Required next submission: ${JSON.stringify(nextSubmission)}`);
   } else {
     lines.push("No candidate submission is currently required.");
+  }
+
+  if (turnId) {
+    lines.push(`Current turn idempotency seed: ${turnId}`);
+  }
+
+  if (pendingSubmission) {
+    lines.push(`Pending candidate submission: ${JSON.stringify(pendingSubmission)}`);
+    lines.push(
+      "Agent action required: validate the pending submission, then call advance_interview_state with expected_state_id equal to the current state and idempotency_key based on the current turn idempotency seed.",
+    );
+  }
+
+  if (artifactRefs && artifactRefs.length > 0) {
+    lines.push(`Pending artifact references: ${JSON.stringify(artifactRefs)}`);
   }
 
   // Candidate context
@@ -106,6 +134,7 @@ export function createInterviewJitContext(input: InterviewJitContextInput): stri
   lines.push(``);
   lines.push("Hard rule: Do NOT invent states or interview phases not in the allowed FSM sequence above.");
   lines.push("Hard rule: Ask only for the current state's required submission. Do not ask about future states.");
+  lines.push("Hard rule: The interview state machine advances only through interview tools. Never claim the state advanced unless advance_interview_state succeeded.");
 
   lines.push("── End Per-turn Interview Context ──");
 

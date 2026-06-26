@@ -220,6 +220,32 @@ describe("createInterviewJitContext", () => {
 
     expect(context).toContain("No candidate submission is currently required.");
   });
+
+  it("includes pending submission, artifact refs, and tool-advancement instruction", () => {
+    const session = createSampleSession();
+    const context = createInterviewJitContext({
+      config: sampleConfig,
+      session,
+      currentState: sampleCurrentState,
+      nextSubmission: videoSubmissionRequirement,
+      turnId: "turn-123",
+      pendingSubmission: { transcript: "I built a distributed queue." },
+      artifactRefs: [
+        {
+          uri: "interview-artifact://demo-company/software-developer/thread-1/audio-1",
+          media_type: "audio/webm",
+          field_hint: "audio_url",
+        },
+      ],
+    });
+
+    expect(context).toContain("Current turn idempotency seed: turn-123");
+    expect(context).toContain("Pending candidate submission");
+    expect(context).toContain("distributed queue");
+    expect(context).toContain("advance_interview_state");
+    expect(context).toContain("Pending artifact references");
+    expect(context).toContain("interview-artifact://demo-company/software-developer/thread-1/audio-1");
+  });
 });
 
 // ── Tests for createInterviewResourceLoader ─────────────────────────────

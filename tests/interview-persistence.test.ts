@@ -73,10 +73,18 @@ describe("InterviewPersistenceBridge", () => {
       profileId: "profile-1",
       source: "screening",
     });
+    expect(bridge.hydrateFromScreening("Ada Lovelace")).toBeNull();
     expect(context?.profile?.["analysis"]).toEqual({
       summary: "Excellent systems candidate",
     });
 
+    const evaluation: FinalEvaluation = {
+      recommendation: "yes",
+      scores: { technical: 10 },
+      strengths: ["Correct code"],
+      risks: [],
+      summary: "Passed technical challenge.",
+    };
     const session: InterviewSession = {
       threadId: "thread-1",
       companyId: "demo-company",
@@ -91,16 +99,10 @@ describe("InterviewPersistenceBridge", () => {
       ],
       scores: { technical: 10 },
       candidateContext: context ?? undefined,
+      finalEvaluation: evaluation,
       isComplete: true,
       createdAt: 1,
       updatedAt: 2,
-    };
-    const evaluation: FinalEvaluation = {
-      recommendation: "yes",
-      scores: { technical: 10 },
-      strengths: ["Correct code"],
-      risks: [],
-      summary: "Passed technical challenge.",
     };
 
     bridge.saveSnapshot(session, undefined, evaluation);
@@ -120,6 +122,22 @@ describe("InterviewPersistenceBridge", () => {
       currentStateId: "complete",
       isComplete: true,
       scores: { technical: 10 },
+    });
+
+    const loadedSession = bridge.loadSession("thread-1");
+    expect(loadedSession).toMatchObject({
+      threadId: "thread-1",
+      companyId: "demo-company",
+      jobId: "software-developer",
+      currentStateId: "complete",
+      candidateContext: {
+        candidateId: "profile-1",
+        profileId: "profile-1",
+      },
+      finalEvaluation: {
+        recommendation: "yes",
+        summary: "Passed technical challenge.",
+      },
     });
 
     bridge.dispose();

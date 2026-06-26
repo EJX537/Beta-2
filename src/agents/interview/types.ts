@@ -43,11 +43,39 @@ export interface InterviewStateConfig {
   expected_submission: SubmissionRequirement;
   transitions_to: string[];
   score_weights: Record<string, number>;
+  /** Optional rubric for grading audio/video submissions in this state. */
+  audioRubric?: AudioGradingRubric;
+}
+
+export interface AudioGradingRubricCategory {
+  label: string;
+  description: string;
+  weight: number;
+  maxScore: number;
+}
+
+export interface AudioGradingRubric {
+  categories: AudioGradingRubricCategory[];
+}
+
+export interface AudioGradeResult {
+  score: number;
+  maxScore: number;
+  summary: string;
+  strengths: string[];
+  risks: string[];
+  details?: Record<string, unknown>;
 }
 
 export interface ScoringCategory {
   label: string;
   max_score: number;
+}
+
+export interface FinalEvaluationConfig {
+  strong_threshold?: number;
+  consider_threshold?: number;
+  weak_threshold?: number;
 }
 
 export interface InterviewConfig {
@@ -57,6 +85,7 @@ export interface InterviewConfig {
   states: InterviewStateConfig[];
   scoring_categories: Record<string, ScoringCategory>;
   recommendation_levels: string[];
+  final_evaluation?: FinalEvaluationConfig;
 }
 
 export interface RunnerFile {
@@ -159,6 +188,7 @@ export interface InterviewSession {
   submissions: SubmissionRecord[];
   scores: Record<string, number>;
   candidateContext?: CandidateContext;
+  finalEvaluation?: FinalEvaluation;
   isComplete: boolean;
   createdAt: number;
   updatedAt: number;
@@ -177,6 +207,7 @@ export interface SubmissionRecord {
   stateId: InterviewStateId;
   data: Record<string, unknown>;
   submittedAt: number;
+  idempotencyKey?: string;
 }
 
 export interface InterviewStateView {
@@ -200,6 +231,33 @@ export interface FinalEvaluation {
   summary: string;
 }
 
+// ── Error Types ────────────────────────────────────────────────────────────
+
+/**
+ * Standardized error codes for interview API responses.
+ */
+export type InterviewErrorCode =
+  | "INVALID_JSON"
+  | "INVALID_PARAMS"
+  | "MISSING_CANDIDATE_CONTEXT"
+  | "CONFIG_NOT_FOUND"
+  | "THREAD_NOT_FOUND"
+  | "THREAD_ROUTE_MISMATCH"
+  | "INVALID_SUBMISSION"
+  | "WRONG_STATE"
+  | "INTERVIEW_AGENT_FAILED";
+
+/**
+ * Standardized error payload for interview API responses.
+ */
+export interface InterviewErrorPayload {
+  code: InterviewErrorCode;
+  message: string;
+  stateId?: string;
+  threadId?: string;
+  details?: Record<string, unknown>;
+}
+
 // ── GMI / Pi Agent Options ───────────────────────────────────────────────
 
 export interface GmiProviderOptions {
@@ -216,14 +274,31 @@ export interface InterviewAgentOptions {
   customTools?: string[];
   /** Optional persistence bridge for DB-backed snapshot storage */
   persistence?: import("./persistence/bridge.js").InterviewPersistenceBridge;
+  /** Optional local artifact store for upload refs */
+  artifactStore?: import("./artifacts/store.js").LocalArtifactStore;
 }
 
 // ── Interview Agent Request / Response ───────────────────────────────────
 
+export interface CandidateArtifactReference {
+  ref?: string;
+  uri: string;
+  path?: string;
+  mediaType?: string;
+  media_type?: string;
+  fieldHint?: string;
+  field_hint?: string;
+  size?: number;
+  sha256?: string;
+}
+
 export interface InterviewRequest {
   message: string;
   threadId?: string;
+  /** Stable per-turn id used by the agent tools as an idempotency key seed. */
+  turnId?: string;
   submission?: Record<string, unknown>;
+  artifactRefs?: CandidateArtifactReference[];
   candidateContext?: CandidateContext;
 }
 

@@ -12,5 +12,6 @@ services:
       - PORT=${PORT:-8080}
       - INTERVIEW_DB=${INTERVIEW_DB:-/data/interview.db}
       - AGENT_DB=${AGENT_DB:-/data/agent1.db}
+      - INTERVIEW_ARTIFACT_ROOT=${INTERVIEW_ARTIFACT_ROOT:-/data/interview-artifacts}
     volumes:
       - ./data:/data

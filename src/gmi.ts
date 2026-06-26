@@ -1,8 +1,15 @@
 import OpenAI from "openai";
 
 export const DEFAULT_GMI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+export const DEFAULT_GMI_GRADING_MODEL = "google/gemini-3.5-flash";
 
 export interface GmiConfig {
+  baseURL: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface GmiGradingConfig {
   baseURL: string;
   apiKey: string;
   model: string;
@@ -41,9 +48,45 @@ export function readGmiConfig(): GmiConfig | null {
 }
 
 /**
+ * Read GMI grading model configuration from environment variables.
+ * Falls back to the main MaaS config if GMI_GRADING_MODEL is not set.
+ */
+export function readGmiGradingConfig(): GmiGradingConfig {
+  const rawBaseURL = process.env["GMI_MAAS_BASE_URL"];
+  const apiKey = process.env["GMI_MAAS_API_KEY"];
+  const model = process.env["GMI_GRADING_MODEL"] ?? DEFAULT_GMI_GRADING_MODEL;
+
+  if (!rawBaseURL || !apiKey) {
+    throw new Error(
+      "GMI MaaS is not configured. Set GMI_MAAS_BASE_URL and GMI_MAAS_API_KEY.",
+    );
+  }
+
+  const baseURL = normalizeGmiBaseURL(rawBaseURL);
+
+  console.info(
+    "[gmi] grading model configured — baseURL=%s model=%s",
+    baseURL,
+    model,
+  );
+  return { baseURL, apiKey, model };
+}
+
+/**
  * Build an OpenAI-compatible client pointed at GMI MaaS.
  */
 export function createGmiClient(config: GmiConfig): OpenAI {
+  return new OpenAI({
+    baseURL: normalizeGmiBaseURL(config.baseURL),
+    apiKey: config.apiKey,
+  });
+}
+
+/**
+ * Build an OpenAI-compatible client for the grading model (same endpoint,
+ * potentially different model).
+ */
+export function createGmiGradingClient(config: GmiGradingConfig): OpenAI {
   return new OpenAI({
     baseURL: normalizeGmiBaseURL(config.baseURL),
     apiKey: config.apiKey,

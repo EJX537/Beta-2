@@ -173,8 +173,8 @@ export class InterviewPersistenceBridge {
   /**
    * Hydrate a CandidateContext from the attached screening.profiles table.
    *
-   * The Python screening DB is read-only here. We lookup by `profiles.id`
-   * first; `candidate_name` fallback exists only to make demos forgiving.
+   * Contract: `profileId` maps to `screening.profiles.id`. The Python
+   * screening DB is attached read-only and is never mutated by this bridge.
    */
   hydrateFromScreening(
     profileId: string,
@@ -195,10 +195,10 @@ export class InterviewPersistenceBridge {
           SELECT id, job_id, candidate_name, resume_text, overall_score,
                  verdict, analysis, created_at
           FROM ${SCREENING_PROFILES_TABLE}
-          WHERE id = ? OR candidate_name = ?
+          WHERE id = ?
           LIMIT 1
         `)
-        .get(lookup, lookup) as Record<string, unknown> | undefined;
+        .get(lookup) as Record<string, unknown> | undefined;
 
       if (!row) {
         return null;
@@ -251,7 +251,7 @@ export class InterviewPersistenceBridge {
         : null);
     const candidateId = session.candidateContext?.candidateId ?? "unknown";
     const status = session.isComplete ? "complete" : "in_progress";
-    const evaluation = finalEvaluation ?? response?.evaluation;
+    const evaluation = finalEvaluation ?? response?.evaluation ?? session.finalEvaluation;
 
     this.db
       .prepare(`
@@ -315,6 +315,7 @@ export class InterviewPersistenceBridge {
       submissions: this.safeParse<SubmissionRecord[]>(row.submissions_json) ?? [],
       scores: this.safeParse<Record<string, number>>(row.scores_json) ?? {},
       candidateContext,
+      finalEvaluation: this.safeParse<FinalEvaluation>(row.final_evaluation_json) ?? undefined,
       isComplete: row.status === "complete",
       createdAt: new Date(row.created_at).getTime(),
       updatedAt: new Date(row.updated_at).getTime(),

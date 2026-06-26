@@ -1,16 +1,47 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type OpenAI from "openai";
 import type { JobStore } from "../jobStore.js";
 import type { GmiConfig } from "../gmi.js";
 import { DEFAULT_GMI_MODEL } from "../gmi.js";
 import { createInterviewAgent } from "../agents/interview/agent.js";
 import type { CreateInterviewAgentResult } from "../agents/interview/agent.js";
+import { LocalArtifactStore } from "../agents/interview/artifacts/store.js";
+import type { ArtifactKind } from "../agents/interview/artifacts/store.js";
 import type { InterviewPersistenceBridge } from "../agents/interview/persistence/bridge.js";
 import type {
+  CandidateArtifactReference,
   CandidateContext,
+  InterviewErrorCode,
   InterviewRequest,
   InterviewResponse,
 } from "../agents/interview/types.js";
+import { InterviewError } from "../agents/interview/errors.js";
+
+// ── Interview Error Status Code Mapping ─────────────────────────────────
+
+/**
+ * Map an InterviewErrorCode to the appropriate HTTP status code.
+ */
+function interviewErrorStatusCode(code: InterviewErrorCode): number {
+  switch (code) {
+    case "INVALID_JSON":
+    case "INVALID_PARAMS":
+    case "MISSING_CANDIDATE_CONTEXT":
+      return 400;
+    case "CONFIG_NOT_FOUND":
+    case "THREAD_NOT_FOUND":
+      return 404;
+    case "THREAD_ROUTE_MISMATCH":
+    case "WRONG_STATE":
+      return 409;
+    case "INVALID_SUBMISSION":
+      return 422;
+    case "INTERVIEW_AGENT_FAILED":
+      return 500;
+    default:
+      return 500;
+  }
+}
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -127,9 +158,252 @@ function hydrateCandidateContext(
     : context;
 }
 
+interface UploadedFileLike {
+  name?: string;
+  type?: string;
+  size?: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
+function isUploadedFileLike(value: unknown): value is UploadedFileLike {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as UploadedFileLike).arrayBuffer === "function",
+  );
+}
+
+function normalizeArtifactKind(value: unknown): ArtifactKind | undefined {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+  if (["audio", "transcript", "video", "code", "file"].includes(value)) {
+    return value as ArtifactKind;
+  }
+  return undefined;
+}
+
+function inferArtifactKind(record: Record<string, unknown>): ArtifactKind {
+  const explicit = normalizeArtifactKind(record["kind"]);
+  if (explicit) {
+    return explicit;
+  }
+  if (record["files"] !== undefined) {
+    return "code";
+  }
+  const fieldHint = stringField(record, "field_hint", "fieldHint");
+  if (fieldHint?.includes("audio")) {
+    return "audio";
+  }
+  if (fieldHint?.includes("transcript")) {
+    return "transcript";
+  }
+  if (fieldHint?.includes("video")) {
+    return "video";
+  }
+  if (fieldHint?.includes("code")) {
+    return "code";
+  }
+  return "file";
+}
+
+async function parseArtifactUploadBody(c: Context<Env>): Promise<{
+  stateId: string;
+  kind: ArtifactKind;
+  fieldHint?: string;
+  contentType?: string;
+  fileName?: string;
+  data: Buffer | string;
+}> {
+  const contentTypeHeader = c.req.header("content-type") ?? "";
+
+  if (contentTypeHeader.includes("multipart/form-data")) {
+    const body = await c.req.parseBody();
+    const record = body as Record<string, unknown>;
+    const stateId = stringField(record, "state_id", "stateId");
+    if (!stateId) {
+      throw new Error("Upload requires state_id.");
+    }
+
+    const file = record["file"];
+    const kind = inferArtifactKind(record);
+    const fieldHint = stringField(record, "field_hint", "fieldHint");
+
+    if (isUploadedFileLike(file)) {
+      return {
+        stateId,
+        kind,
+        fieldHint,
+        contentType: file.type || stringField(record, "content_type", "contentType"),
+        fileName: file.name || stringField(record, "filename", "fileName"),
+        data: Buffer.from(await file.arrayBuffer()),
+      };
+    }
+
+    const textContent =
+      stringField(record, "content", "text", "transcript") ??
+      (typeof file === "string" ? file : undefined);
+    if (!textContent) {
+      throw new Error("Multipart upload requires a file or text content.");
+    }
+    return {
+      stateId,
+      kind,
+      fieldHint,
+      contentType: stringField(record, "content_type", "contentType"),
+      fileName: stringField(record, "filename", "fileName"),
+      data: textContent,
+    };
+  }
+
+  const body = asRecord(await c.req.json<Record<string, unknown>>()) ?? {};
+  const stateId = stringField(body, "state_id", "stateId");
+  if (!stateId) {
+    throw new Error("Upload requires state_id.");
+  }
+
+  const kind = inferArtifactKind(body);
+  const contentType =
+    stringField(body, "content_type", "contentType") ??
+    (body["files"] !== undefined ? "application/json" : undefined);
+  const fileName = stringField(body, "filename", "fileName");
+  const fieldHint = stringField(body, "field_hint", "fieldHint");
+
+  if (body["files"] !== undefined) {
+    return {
+      stateId,
+      kind: "code",
+      fieldHint: fieldHint ?? "code_artifact_ref",
+      contentType: contentType ?? "application/json",
+      fileName: fileName ?? "code.json",
+      data: JSON.stringify({ files: body["files"] }, null, 2),
+    };
+  }
+
+  const base64Content = stringField(body, "content_base64", "base64");
+  if (base64Content) {
+    return {
+      stateId,
+      kind,
+      fieldHint,
+      contentType,
+      fileName,
+      data: Buffer.from(base64Content, "base64"),
+    };
+  }
+
+  const textContent = stringField(body, "content", "text", "transcript");
+  if (!textContent) {
+    throw new Error("JSON upload requires files, content_base64, content, text, or transcript.");
+  }
+
+  return {
+    stateId,
+    kind,
+    fieldHint,
+    contentType,
+    fileName,
+    data: textContent,
+  };
+}
+
+function artifactResponse(input: ReturnType<LocalArtifactStore["store"]>) {
+  const { artifact, submissionPatch } = input;
+  return {
+    artifact: {
+      ref: artifact.ref,
+      uri: artifact.uri,
+      kind: artifact.kind,
+      field_hint: artifact.fieldHint ?? null,
+      content_type: artifact.contentType,
+      file_name: artifact.fileName,
+      size_bytes: artifact.sizeBytes,
+      sha256: artifact.sha256,
+      path: artifact.path,
+      created_at: artifact.createdAt,
+    },
+    submission_patch: submissionPatch,
+  };
+}
+
+function artifactRefsFromSubmission(
+  submission: Record<string, unknown> | undefined,
+): string[] {
+  if (!submission) {
+    return [];
+  }
+
+  return Object.entries(submission)
+    .filter(([key, value]) =>
+      (key === "artifact_ref" || key.endsWith("_artifact_ref")) &&
+      typeof value === "string" &&
+      value.length > 0,
+    )
+    .map(([, value]) => value as string);
+}
+
+function resolveArtifactReferences(
+  store: LocalArtifactStore,
+  refs: string[],
+): CandidateArtifactReference[] {
+  return refs.map((ref) => {
+    try {
+      return store.toCandidateReference(ref);
+    } catch {
+      return { uri: ref };
+    }
+  });
+}
+
 // ── Router ───────────────────────────────────────────────────────────────
 
 const router = new Hono<Env>();
+
+router.post("/interview/:companyId/:jobId/:threadId/uploads", async (c) => {
+  const { companyId, jobId, threadId } = c.req.param();
+
+  let upload;
+  try {
+    upload = await parseArtifactUploadBody(c);
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_UPLOAD",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400,
+    );
+  }
+
+  try {
+    const artifactStore = new LocalArtifactStore();
+    const stored = artifactStore.store({
+      companyId,
+      jobId,
+      threadId,
+      stateId: upload.stateId,
+      kind: upload.kind,
+      fieldHint: upload.fieldHint,
+      contentType: upload.contentType,
+      fileName: upload.fileName,
+      data: upload.data,
+    });
+
+    return c.json(artifactResponse(stored), 201);
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          code: "UPLOAD_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500,
+    );
+  }
+});
 
 router.post("/interview/:companyId/:jobId", async (c) => {
   const { companyId, jobId } = c.req.param();
@@ -185,7 +459,9 @@ router.post("/interview/:companyId/:jobId", async (c) => {
 
   let message: string;
   let threadId: string | undefined;
+  let turnId: string | undefined;
   let submission: Record<string, unknown> | undefined;
+  let artifactRefs: InterviewRequest["artifactRefs"];
   let bodyCandidateContext: CandidateContext | undefined;
   let bodyIdContext: CandidateContext | undefined;
   let configRoot: string | undefined;
@@ -199,7 +475,13 @@ router.post("/interview/:companyId/:jobId", async (c) => {
         ? bodyRecord["message"]
         : "Continue the interview.";
     threadId = stringField(bodyRecord, "thread_id", "threadId") ?? queryThreadId;
+    turnId = stringField(bodyRecord, "turn_id", "turnId");
     submission = asRecord(bodyRecord["submission"]);
+    artifactRefs = Array.isArray(bodyRecord["artifact_refs"])
+      ? (bodyRecord["artifact_refs"] as InterviewRequest["artifactRefs"])
+      : Array.isArray(bodyRecord["artifactRefs"])
+        ? (bodyRecord["artifactRefs"] as InterviewRequest["artifactRefs"])
+        : undefined;
 
     bodyCandidateContext =
       candidateContextFromRecord(asRecord(bodyRecord["candidate_context"]), threadId) ??
@@ -228,8 +510,17 @@ router.post("/interview/:companyId/:jobId", async (c) => {
     c.var.persistence,
     bodyCandidateContext ?? bodyIdContext ?? paramsCandidateContext ?? queryCandidateContext,
   );
+  const artifactStore = new LocalArtifactStore();
+  const submissionArtifactRefs = resolveArtifactReferences(
+    artifactStore,
+    artifactRefsFromSubmission(submission),
+  );
+  const mergedArtifactRefs = [
+    ...(artifactRefs ?? []),
+    ...submissionArtifactRefs,
+  ];
 
-  const cacheKey = `${companyId}/${jobId}:${configRoot ?? "default"}`;
+  const cacheKey = `${companyId}/${jobId}:${configRoot ?? "default"}:${artifactStore.root}`;
   const cache = c.var.interviewAgentCache;
 
   let agentResult: CreateInterviewAgentResult;
@@ -249,6 +540,7 @@ router.post("/interview/:companyId/:jobId", async (c) => {
         companyId,
         jobId,
         persistence: c.var.persistence ?? undefined,
+        artifactStore,
       },
       configRoot ? { configRoot } : undefined,
     );
@@ -260,7 +552,9 @@ router.post("/interview/:companyId/:jobId", async (c) => {
   const interviewRequest: InterviewRequest = {
     message,
     threadId,
+    turnId,
     submission,
+    artifactRefs: mergedArtifactRefs.length > 0 ? mergedArtifactRefs : undefined,
     candidateContext: mergedCandidateContext,
   };
 
@@ -268,6 +562,14 @@ router.post("/interview/:companyId/:jobId", async (c) => {
   try {
     response = await agentResult.handleInteraction(interviewRequest);
   } catch (error) {
+    if (error instanceof InterviewError) {
+      const statusCode = interviewErrorStatusCode(error.code) as 400 | 404 | 409 | 422 | 500;
+      return c.json(
+        { error: error.toResponsePayload() },
+        statusCode,
+      );
+    }
+
     const msg = error instanceof Error ? error.message : String(error);
     console.error(
       "[interview] handleInteraction error for %s/%s: %s",
@@ -278,7 +580,7 @@ router.post("/interview/:companyId/:jobId", async (c) => {
     return c.json(
       {
         error: {
-          code: "AGENT_ERROR",
+          code: "INTERVIEW_AGENT_FAILED",
           message: `Interview agent error: ${msg}`,
         },
       },

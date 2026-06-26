@@ -17,35 +17,79 @@
     {
       "id": "video_question_1",
       "label": "Recorded Response 1",
-      "agent_instruction": "Ask the candidate about their background and motivation. They may answer with a 30-second audio recording or transcript text; video is not required for grading.",
+      "agent_instruction": "Ask the candidate about their background and motivation. They may answer with a 30-second audio recording upload or transcript text; video is not required for grading.",
       "expected_submission": {
         "type": "video",
         "max_seconds": 30,
         "fields": [],
-        "any_of_fields": ["audio_url", "transcript"],
-        "optional_fields": ["video_url"]
+        "any_of_fields": ["audio_artifact_ref", "transcript_artifact_ref", "transcript"],
+        "optional_fields": ["video_artifact_ref"]
       },
       "transitions_to": ["video_question_2"],
       "score_weights": {
         "communication": 0.5,
         "role_fit": 0.5
+      },
+      "audioRubric": {
+        "categories": [
+          {
+            "label": "Clarity",
+            "description": "How clearly and coherently the candidate articulates their thoughts.",
+            "weight": 0.4,
+            "maxScore": 10
+          },
+          {
+            "label": "Relevance",
+            "description": "How relevant the response is to the question asked.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Depth",
+            "description": "The depth of insight, self-awareness, and thoughtfulness in the response.",
+            "weight": 0.3,
+            "maxScore": 10
+          }
+        ]
       }
     },
     {
       "id": "video_question_2",
       "label": "Recorded Response 2",
-      "agent_instruction": "Ask about a challenging technical problem they solved. They may answer with a 30-second audio recording or transcript text; video is not required for grading.",
+      "agent_instruction": "Ask about a challenging technical problem they solved. They may answer with a 30-second audio recording upload or transcript text; video is not required for grading.",
       "expected_submission": {
         "type": "video",
         "max_seconds": 30,
         "fields": [],
-        "any_of_fields": ["audio_url", "transcript"],
-        "optional_fields": ["video_url"]
+        "any_of_fields": ["audio_artifact_ref", "transcript_artifact_ref", "transcript"],
+        "optional_fields": ["video_artifact_ref"]
       },
       "transitions_to": ["technical_challenge"],
       "score_weights": {
         "problem_solving": 0.5,
         "communication": 0.5
+      },
+      "audioRubric": {
+        "categories": [
+          {
+            "label": "Clarity",
+            "description": "How clearly the candidate explains the technical problem and solution.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Relevance",
+            "description": "How relevant the example is to the question and the role.",
+            "weight": 0.3,
+            "maxScore": 10
+          },
+          {
+            "label": "Depth",
+            "description": "Technical depth of the explanation and problem-solving approach.",
+            "weight": 0.4,
+            "maxScore": 10
+          }
+        ]
       }
     },
     {
@@ -54,7 +98,8 @@
       "agent_instruction": "Present the coding challenge requirements to the candidate.",
       "expected_submission": {
         "type": "code",
-        "fields": ["language", "files", "entrypoint"]
+        "fields": ["language", "entrypoint"],
+        "any_of_fields": ["code_artifact_ref", "files"]
       },
       "transitions_to": ["technical_submission_review"],
       "score_weights": {
@@ -102,5 +147,10 @@
     "problem_solving": { "label": "Problem Solving", "max_score": 10 },
     "role_fit": { "label": "Role Fit", "max_score": 10 }
   },
-  "recommendation_levels": ["strong_yes", "yes", "mixed", "no"]
+  "recommendation_levels": ["strong_yes", "yes", "consider", "no"],
+  "final_evaluation": {
+    "strong_threshold": 0.8,
+    "consider_threshold": 0.6,
+    "weak_threshold": 0.4
+  }
 }
