@@ -103,6 +103,10 @@ def seed_local() -> None:
 
     agent1.init_db()
     with agent1.db() as conn:
+        existing = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        if existing:
+            print(f"Jobs already present ({existing}); skipping seed.")
+            return
         for job in SAMPLE_JOBS:
             config = agent1.validate_ranking_config(job["ranking_config"])
             job_id = str(uuid.uuid4())
