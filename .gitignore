@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
 
 # pi agent workspace
 .pi/
@@ -28,8 +31,10 @@ dist-ssr
 
 .env
 
-# agent1 sqlite store
+# SQLite stores
 *.db
+*.db-*
+data/
 
 # Python
 __pycache__/

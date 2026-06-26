@@ -1,0 +1,19 @@
+{
+  "id": "software-developer",
+  "title": "Software Developer",
+  "company_id": "demo-company",
+  "level": "mid",
+  "description": "Build and maintain software applications.",
+  "responsibilities": [
+    "Write clean, maintainable code",
+    "Participate in code reviews",
+    "Collaborate with cross-functional teams"
+  ],
+  "required_skills": ["TypeScript", "Node.js", "Git"],
+  "preferred_skills": ["React", "Docker", "Cloud platforms"],
+  "evaluation_priorities": [
+    "problem_solving",
+    "code_quality",
+    "communication"
+  ]
+}

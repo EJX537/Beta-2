@@ -1,9 +1,23 @@
 import OpenAI from "openai";
 
-interface GmiConfig {
+export const DEFAULT_GMI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+export const DEFAULT_GMI_GRADING_MODEL = "google/gemini-3.5-flash";
+
+export interface GmiConfig {
   baseURL: string;
   apiKey: string;
   model: string;
+}
+
+export interface GmiGradingConfig {
+  baseURL: string;
+  apiKey: string;
+  model: string;
+}
+
+export function normalizeGmiBaseURL(baseURL: string): string {
+  const trimmed = baseURL.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
 /**
@@ -11,21 +25,47 @@ interface GmiConfig {
  * Returns `null` if any required var is missing.
  */
 export function readGmiConfig(): GmiConfig | null {
-  const baseURL = process.env["GMI_MAAS_BASE_URL"];
+  const rawBaseURL = process.env["GMI_MAAS_BASE_URL"];
   const apiKey = process.env["GMI_MAAS_API_KEY"];
-  const model = process.env["GMI_MODELS"];
+  const model = process.env["GMI_MODELS"] ?? DEFAULT_GMI_MODEL;
 
-  if (!baseURL || !apiKey || !model) {
+  if (!rawBaseURL || !apiKey) {
     const missing: string[] = [];
-    if (!baseURL) missing.push("GMI_MAAS_BASE_URL");
+    if (!rawBaseURL) missing.push("GMI_MAAS_BASE_URL");
     if (!apiKey) missing.push("GMI_MAAS_API_KEY");
-    if (!model) missing.push("GMI_MODELS");
     console.warn("[gmi] missing env vars: %s", missing.join(", "));
     return null;
   }
 
+  const baseURL = normalizeGmiBaseURL(rawBaseURL);
+
   console.info(
     "[gmi] GMI MaaS configured — baseURL=%s model=%s",
+    baseURL,
+    model,
+  );
+  return { baseURL, apiKey, model };
+}
+
+/**
+ * Read GMI grading model configuration from environment variables.
+ * Falls back to the main MaaS config if GMI_GRADING_MODEL is not set.
+ */
+export function readGmiGradingConfig(): GmiGradingConfig {
+  const rawBaseURL = process.env["GMI_MAAS_BASE_URL"];
+  const apiKey = process.env["GMI_MAAS_API_KEY"];
+  const model = process.env["GMI_GRADING_MODEL"] ?? DEFAULT_GMI_GRADING_MODEL;
+
+  if (!rawBaseURL || !apiKey) {
+    throw new Error(
+      "GMI MaaS is not configured. Set GMI_MAAS_BASE_URL and GMI_MAAS_API_KEY.",
+    );
+  }
+
+  const baseURL = normalizeGmiBaseURL(rawBaseURL);
+
+  console.info(
+    "[gmi] grading model configured — baseURL=%s model=%s",
     baseURL,
     model,
   );
@@ -37,7 +77,18 @@ export function readGmiConfig(): GmiConfig | null {
  */
 export function createGmiClient(config: GmiConfig): OpenAI {
   return new OpenAI({
-    baseURL: config.baseURL,
+    baseURL: normalizeGmiBaseURL(config.baseURL),
+    apiKey: config.apiKey,
+  });
+}
+
+/**
+ * Build an OpenAI-compatible client for the grading model (same endpoint,
+ * potentially different model).
+ */
+export function createGmiGradingClient(config: GmiGradingConfig): OpenAI {
+  return new OpenAI({
+    baseURL: normalizeGmiBaseURL(config.baseURL),
     apiKey: config.apiKey,
   });
 }

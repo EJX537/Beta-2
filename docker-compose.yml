@@ -1,9 +1,17 @@
-# Two-agent stack:
-#   1. resume-agent     — resume upload + ranking (agent1.py). Ready to run.
-#   2. interview-agent   — job interview agent (teammate's). Placeholder below.
+# Two-agent stack. Both services share the ./data directory so the interview
+# agent can read the resume agent's agent1.db (read-only) to hydrate candidate
+# context by profile_id — that shared DB is the integration seam.
 #
-# Bring it up:   docker compose up --build
-# The resume agent needs ANTHROPIC_API_KEY — put it in .env (already gitignored).
+#   resume-agent     — resume upload + ranking (agent1.py, Anthropic SDK)
+#                      writes  /data/agent1.db          -> http://localhost:8081
+#   interview-agent  — FSM-driven interviewing (pi SDK, GMI MaaS)
+#                      reads   /data/agent1.db (RO)
+#                      writes  /data/interview.db        -> http://localhost:8080
+#
+# Bring it up:  docker compose up --build
+# Secrets come from .env:
+#   ANTHROPIC_API_KEY   (resume agent)
+#   GMI_MAAS_API_KEY / GMI_MAAS_BASE_URL / GMI_MODELS / GMI_GRADING_MODEL  (interview agent)
 
 services:
   resume-agent:
@@ -11,7 +19,9 @@ services:
       context: .
       dockerfile: Dockerfile.resume
     ports:
-      - "8080:8080"
+      - "8081:8080"          # host 8081 -> container 8080
+    env_file:
+      - .env
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       - AGENT_PORT=8080
@@ -20,23 +30,25 @@ services:
       # - AGENT_MODEL=claude-sonnet-4-6
       # - AGENT_MAX_RESUME_CHARS=60000
     volumes:
-      # Persist the SQLite store (jobs + ranked candidates) across restarts.
-      - resume-data:/data
+      - ./data:/data
     restart: unless-stopped
 
-  # ── Interview agent (teammate-owned) ──────────────────────────────────────
-  # Uncomment and fill in once the teammate's service is ready. Point `context`
-  # at their code dir, set their Dockerfile, and expose their port.
-  #
-  # interview-agent:
-  #   build:
-  #     context: ./interview          # <- teammate's source directory
-  #     dockerfile: Dockerfile        # <- teammate's Dockerfile
-  #   ports:
-  #     - "8082:8082"                 # <- host:container port for their service
-  #   environment:
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
-  #   restart: unless-stopped
-
-volumes:
-  resume-data:
+  interview-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile          # PR's Node/pi multi-stage build
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=8080
+      - INTERVIEW_DB=${INTERVIEW_DB:-/data/interview.db}
+      - AGENT_DB=${AGENT_DB:-/data/agent1.db}
+      - INTERVIEW_ARTIFACT_ROOT=${INTERVIEW_ARTIFACT_ROOT:-/data/interview-artifacts}
+    volumes:
+      - ./data:/data
+    depends_on:
+      - resume-agent                  # ensure agent1.db exists before attach
+    restart: unless-stopped
