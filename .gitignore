@@ -30,3 +30,8 @@ dist-ssr
 
 # agent1 sqlite store
 *.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
