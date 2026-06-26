@@ -36,11 +36,13 @@ COPY static ./static
 
 # Persisted SQLite DB lives here (mount a volume to keep data across restarts).
 RUN mkdir -p /data && chown -R app:app /data /app /home/app
+# Listen on 8080 to match GMI Cloud's default container web port. Override
+# AGENT_PORT at runtime (e.g. docker-compose) for local use if desired.
 ENV AGENT_DB=/data/agent1.db \
-    AGENT_PORT=8081
+    AGENT_PORT=8080
 
 USER app
-EXPOSE 8081
+EXPOSE 8080
 
 # Run via uvicorn. agent1.py binds 0.0.0.0 on AGENT_PORT.
 CMD ["python", "agent1.py"]

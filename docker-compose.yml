@@ -11,10 +11,10 @@ services:
       context: .
       dockerfile: Dockerfile.resume
     ports:
-      - "8081:8081"
+      - "8080:8080"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
-      - AGENT_PORT=8081
+      - AGENT_PORT=8080
       - AGENT_DB=/data/agent1.db
       # Optional tuning (defaults shown in agent1.py):
       # - AGENT_MODEL=claude-sonnet-4-6
