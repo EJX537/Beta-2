@@ -12,6 +12,7 @@ import type {
   InterviewSession,
   InterviewStateConfig,
   LocalRunnerOutput,
+  ScoringCategory,
   TechnicalChallengeConfig,
 } from "../types.js";
 import {
@@ -54,6 +55,24 @@ interface ToolJsonResult {
   technical_result?: LocalRunnerOutput;
   audio_grade_result?: AudioGradeResult;
   audio_grade_error?: string;
+}
+
+/**
+ * Clamp an accumulated category score to its configured max_score so that
+ * mid-interview (per-turn) score displays never exceed the category ceiling.
+ * The final evaluation already normalizes to [0,1], but the raw session.scores
+ * map is shown to the candidate/agent between rounds and should stay in range.
+ */
+function clampScore(
+  categories: Record<string, ScoringCategory> | undefined,
+  category: string,
+  value: number,
+): number {
+  const max = categories?.[category]?.max_score;
+  if (typeof max === "number" && max > 0) {
+    return Math.min(value, max);
+  }
+  return value;
 }
 
 // ── Tool Factory ─────────────────────────────────────────────────────────
@@ -293,8 +312,11 @@ export function createInterviewTools(
       };
 
       for (const [category, weight] of Object.entries(state.score_weights)) {
-        session.scores[category] =
-          (session.scores[category] ?? 0) + technicalResult.score * weight;
+        session.scores[category] = clampScore(
+          config.scoring_categories,
+          category,
+          (session.scores[category] ?? 0) + technicalResult.score * weight,
+        );
       }
 
       if (!technicalResult.passed && technicalResult.exitCode !== 0) {
@@ -369,8 +391,11 @@ export function createInterviewTools(
         if (catDetail && typeof catDetail === "object") {
           const detail = catDetail as Record<string, unknown>;
           const catScore = Number(detail["score"]) ?? 0;
-          session.scores[category] =
-            (session.scores[category] ?? 0) + catScore * weight;
+          session.scores[category] = clampScore(
+            config.scoring_categories,
+            category,
+            (session.scores[category] ?? 0) + catScore * weight,
+          );
         } else {
           // Fall back to distributing the overall score proportionally
           const catMax =
@@ -380,8 +405,11 @@ export function createInterviewTools(
             gradeResult.maxScore > 0
               ? gradeResult.score / gradeResult.maxScore
               : 0;
-          session.scores[category] =
-            (session.scores[category] ?? 0) + catMax * proportion * weight;
+          session.scores[category] = clampScore(
+            config.scoring_categories,
+            category,
+            (session.scores[category] ?? 0) + catMax * proportion * weight,
+          );
         }
       }
 
