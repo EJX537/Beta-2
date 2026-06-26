@@ -1,0 +1,29 @@
+{
+  "name": "beta-agent",
+  "description": "AI Agent built at Beta Hackathon — containerized TypeScript server for AgentBox",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch",
+    "start": "node --enable-source-maps dist/index.js",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "docker:build": "docker build -t beta-agent .",
+    "docker:run": "docker run -p 8080:8080 beta-agent"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/uuid": "^10.0.0",
+    "typescript": "~5.8.0",
+    "vitest": "^3.2.6"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.6",
+    "hono": "^4.12.27",
+    "openai": "^6.45.0",
+    "uuid": "^14.0.1"
+  }
+}
