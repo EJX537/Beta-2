@@ -5,10 +5,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - PORT=8080
-      # Uncomment these when deploying on GMI (injected by AgentBox)
-      # - GMI_MAAS_BASE_URL=https://api.gmi-serving.com
-      # - GMI_MAAS_API_KEY=your-key
-      # - GMI_MODELS=deepseek-ai/DeepSeek-V4-Pro
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-8080}
+      - INTERVIEW_DB=${INTERVIEW_DB:-/data/interview.db}
+      - AGENT_DB=${AGENT_DB:-/data/agent1.db}
+    volumes:
+      - ./data:/data

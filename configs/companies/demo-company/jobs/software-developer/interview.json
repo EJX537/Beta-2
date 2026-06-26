@@ -1,0 +1,106 @@
+{
+  "company_id": "demo-company",
+  "job_id": "software-developer",
+  "version": "1.0.0",
+  "states": [
+    {
+      "id": "intro",
+      "label": "Introduction",
+      "agent_instruction": "Greet the candidate and explain the interview structure.",
+      "expected_submission": {
+        "type": "text",
+        "fields": ["answer"]
+      },
+      "transitions_to": ["video_question_1"],
+      "score_weights": {}
+    },
+    {
+      "id": "video_question_1",
+      "label": "Recorded Response 1",
+      "agent_instruction": "Ask the candidate about their background and motivation. They may answer with a 30-second audio recording or transcript text; video is not required for grading.",
+      "expected_submission": {
+        "type": "video",
+        "max_seconds": 30,
+        "fields": [],
+        "any_of_fields": ["audio_url", "transcript"],
+        "optional_fields": ["video_url"]
+      },
+      "transitions_to": ["video_question_2"],
+      "score_weights": {
+        "communication": 0.5,
+        "role_fit": 0.5
+      }
+    },
+    {
+      "id": "video_question_2",
+      "label": "Recorded Response 2",
+      "agent_instruction": "Ask about a challenging technical problem they solved. They may answer with a 30-second audio recording or transcript text; video is not required for grading.",
+      "expected_submission": {
+        "type": "video",
+        "max_seconds": 30,
+        "fields": [],
+        "any_of_fields": ["audio_url", "transcript"],
+        "optional_fields": ["video_url"]
+      },
+      "transitions_to": ["technical_challenge"],
+      "score_weights": {
+        "problem_solving": 0.5,
+        "communication": 0.5
+      }
+    },
+    {
+      "id": "technical_challenge",
+      "label": "Technical Challenge",
+      "agent_instruction": "Present the coding challenge requirements to the candidate.",
+      "expected_submission": {
+        "type": "code",
+        "fields": ["language", "files", "entrypoint"]
+      },
+      "transitions_to": ["technical_submission_review"],
+      "score_weights": {
+        "technical_depth": 0.7,
+        "problem_solving": 0.3
+      }
+    },
+    {
+      "id": "technical_submission_review",
+      "label": "Technical Submission Review",
+      "agent_instruction": "Review the submitted code and run the evaluation.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": ["final_evaluation"],
+      "score_weights": {}
+    },
+    {
+      "id": "final_evaluation",
+      "label": "Final Evaluation",
+      "agent_instruction": "Produce the final evaluation scorecard.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": ["complete"],
+      "score_weights": {}
+    },
+    {
+      "id": "complete",
+      "label": "Complete",
+      "agent_instruction": "Interview is complete. Provide summary.",
+      "expected_submission": {
+        "type": "none",
+        "fields": []
+      },
+      "transitions_to": [],
+      "score_weights": {}
+    }
+  ],
+  "scoring_categories": {
+    "communication": { "label": "Communication", "max_score": 10 },
+    "technical_depth": { "label": "Technical Depth", "max_score": 10 },
+    "problem_solving": { "label": "Problem Solving", "max_score": 10 },
+    "role_fit": { "label": "Role Fit", "max_score": 10 }
+  },
+  "recommendation_levels": ["strong_yes", "yes", "mixed", "no"]
+}

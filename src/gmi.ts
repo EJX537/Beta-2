@@ -1,9 +1,16 @@
 import OpenAI from "openai";
 
-interface GmiConfig {
+export const DEFAULT_GMI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+
+export interface GmiConfig {
   baseURL: string;
   apiKey: string;
   model: string;
+}
+
+export function normalizeGmiBaseURL(baseURL: string): string {
+  const trimmed = baseURL.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
 /**
@@ -11,18 +18,19 @@ interface GmiConfig {
  * Returns `null` if any required var is missing.
  */
 export function readGmiConfig(): GmiConfig | null {
-  const baseURL = process.env["GMI_MAAS_BASE_URL"];
+  const rawBaseURL = process.env["GMI_MAAS_BASE_URL"];
   const apiKey = process.env["GMI_MAAS_API_KEY"];
-  const model = process.env["GMI_MODELS"];
+  const model = process.env["GMI_MODELS"] ?? DEFAULT_GMI_MODEL;
 
-  if (!baseURL || !apiKey || !model) {
+  if (!rawBaseURL || !apiKey) {
     const missing: string[] = [];
-    if (!baseURL) missing.push("GMI_MAAS_BASE_URL");
+    if (!rawBaseURL) missing.push("GMI_MAAS_BASE_URL");
     if (!apiKey) missing.push("GMI_MAAS_API_KEY");
-    if (!model) missing.push("GMI_MODELS");
     console.warn("[gmi] missing env vars: %s", missing.join(", "));
     return null;
   }
+
+  const baseURL = normalizeGmiBaseURL(rawBaseURL);
 
   console.info(
     "[gmi] GMI MaaS configured — baseURL=%s model=%s",
@@ -37,7 +45,7 @@ export function readGmiConfig(): GmiConfig | null {
  */
 export function createGmiClient(config: GmiConfig): OpenAI {
   return new OpenAI({
-    baseURL: config.baseURL,
+    baseURL: normalizeGmiBaseURL(config.baseURL),
     apiKey: config.apiKey,
   });
 }

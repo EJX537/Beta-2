@@ -1,0 +1,8 @@
+{
+  "id": "demo-company",
+  "name": "Demo Company Inc.",
+  "description": "A fictional company building innovative demo products.",
+  "values": ["innovation", "quality", "collaboration"],
+  "hiring_style": "thorough-but-friendly",
+  "agent_tone": "professional-warm"
+}

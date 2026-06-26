@@ -1,0 +1,37 @@
+{
+  "title": "FizzBuzz Implementation",
+  "prompt": "Write a program that prints numbers from 1 to 100. For multiples of 3, print 'Fizz' instead of the number. For multiples of 5, print 'Buzz'. For numbers which are multiples of both 3 and 5, print 'FizzBuzz'.",
+  "accepted_languages": ["typescript", "javascript", "python"],
+  "acceptedLanguages": ["typescript", "javascript", "python"],
+  "scoring_rubric": [
+    { "criterion": "correctness", "weight": 0.5 },
+    { "criterion": "code_quality", "weight": 0.3 },
+    { "criterion": "edge_cases", "weight": 0.2 }
+  ],
+  "test_command": "node -e \"$CODE\"",
+  "timeout_seconds": 10,
+  "maxScore": 10,
+  "max_score": 10,
+  "requiredFiles": ["solution.js"],
+  "required_files": ["solution.js"],
+  "runner": {
+    "parser": "stdout-json-last-line",
+    "scorePath": "score",
+    "passedPath": "passed",
+    "summaryPath": "summary",
+    "fallback": {
+      "score": 0,
+      "passed": false,
+      "summary": "No valid JSON output received from verifier."
+    },
+    "config": {
+      "command": "node verifier.js",
+      "cwd": ".",
+      "timeoutMs": 10000,
+      "allowInstall": false,
+      "supportFiles": {
+        "verifier.js": "// FizzBuzz Verifier — runs the candidate's solution.js and prints JSON on last line\nconst fs = require('fs');\nconst path = require('path');\n\nfunction runVerifier() {\n  const solutionPath = path.join(__dirname, 'solution.js');\n  if (!fs.existsSync(solutionPath)) {\n    console.log(JSON.stringify({ passed: false, score: 0, summary: 'solution.js not found', details: { error: 'missing file' } }));\n    process.exit(1);\n  }\n\n  // Capture console.log output from the solution\n  const logs = [];\n  const origLog = console.log;\n  console.log = (...args) => { logs.push(args.map(String).join(' ')); };\n\n  try {\n    require(solutionPath);\n  } catch (e) {\n    console.log = origLog;\n    console.log(JSON.stringify({ passed: false, score: 0, summary: 'Solution threw an error: ' + e.message, details: { error: e.message } }));\n    process.exit(1);\n  }\n\n  console.log = origLog;\n\n  // Verify FizzBuzz output\n  const lines = logs.flatMap(l => l.split('\\n')).filter(l => l.trim());\n  let passed = true;\n  let score = 10;\n  const details = [];\n\n  if (lines.length !== 100) {\n    passed = false;\n    score = 0;\n    details.push('Expected 100 lines, got ' + lines.length);\n  }\n\n  for (let i = 1; i <= 100 && passed; i++) {\n    const line = lines[i - 1];\n    let expected;\n    if (i % 15 === 0) expected = 'FizzBuzz';\n    else if (i % 3 === 0) expected = 'Fizz';\n    else if (i % 5 === 0) expected = 'Buzz';\n    else expected = String(i);\n\n    if (line !== expected) {\n      passed = false;\n      score = Math.max(0, score - 3);\n      details.push('Line ' + i + ': expected \"' + expected + '\", got \"' + line + '\"');\n      if (details.length >= 3) break;\n    }\n  }\n\n  if (passed) {\n    details.push('All 100 lines correct');\n  }\n\n  const summary = passed ? 'All FizzBuzz tests passed!' : 'Some tests failed. See details.';\n  console.log(JSON.stringify({ passed, score, summary, details }));\n}\n\nrunVerifier();\n"
+      }
+    }
+  }
+}

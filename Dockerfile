@@ -9,12 +9,15 @@ RUN npm run build
 # ---- Production stage ----
 FROM node:24-alpine AS production
 WORKDIR /app
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+  && mkdir -p /data \
+  && chown -R app:app /data
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/configs ./configs
 
 USER app
 EXPOSE 8080
