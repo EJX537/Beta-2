@@ -86,6 +86,36 @@ up() {
   wait_running "${id}"
 }
 
+# Fetch the deployment record (contains current image_url + env array).
+get_deployment() {
+  _req "${API}/agents/deployments/${DEPLOYMENT}" "${AUTH[@]}"
+}
+
+# Point the deployment at a new image tag WITHOUT touching env.
+# PATCH replaces the whole env array, so we read the live env from the current
+# record and send it straight back, swapping only image_url. This preserves the
+# locked GMI_MAAS_* vars and ANTHROPIC_API_KEY. Re-uses an immutable tag so GMI
+# is forced to re-pull (a re-used tag may be cached and silently ignored).
+#   ./gmi.sh deploy v3   ->  image docker.io/braahulm/beta-career:v3
+set_image() {
+  local tag="${1:?need image tag, e.g. v3}"
+  local repo="${GMI_IMAGE_REPO:-docker.io/braahulm/beta-career}"
+  local image="${repo}:${tag}"
+  echo "reading current deployment env ..." >&2
+  local cur env body
+  cur="$(get_deployment)"
+  env="$(echo "${cur}" | jq -c '.env // .spec.env // []')"
+  if [ "${env}" = "[]" ]; then
+    echo "WARNING: current env came back empty; PATCH would wipe env vars." >&2
+    echo "Aborting. Inspect with: ./gmi.sh get" >&2
+    return 1
+  fi
+  echo "patching image_url -> ${image} (preserving $(echo "${env}" | jq 'length') env vars)" >&2
+  body="$(jq -cn --arg img "${image}" --argjson env "${env}" '{image_url:$img, env:$env}')"
+  _req -X PATCH "${API}/agents/deployments/${DEPLOYMENT}" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' -d "${body}"
+}
+
 # Pretty-print JSON, falling back to raw text (e.g. plain-text 4xx bodies).
 pp() { local b; b="$(cat)"; echo "${b}" | jq . 2>/dev/null || echo "${b}"; }
 
@@ -96,6 +126,8 @@ case "${cmd}" in
   status)    status "${1:-}" | pp ;;
   wait)      wait_running "${1:-}" ;;
   up)        up ;;
+  get)       get_deployment | pp ;;
+  deploy)    set_image "${1:-}" | pp ;;
   terminate) terminate "${1:-}" ;;
-  *) echo "usage: $0 {provision|list|status <id>|wait <id>|up|terminate <id>}" >&2; exit 2 ;;
+  *) echo "usage: $0 {provision|list|status <id>|wait <id>|up|get|deploy <tag>|terminate <id>}" >&2; exit 2 ;;
 esac
